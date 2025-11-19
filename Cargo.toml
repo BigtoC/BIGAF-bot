@@ -1,0 +1,11 @@
+[package]
+name = "BIGAF-bot"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+alloy              = "1.0"
+alloy-network      = "1.0"
+alloy-primitives   = { version = "1.3", features = ["k256", "serde"] }
+alloy-provider     = "1.0"
+alloy-signer       = "1.0"
