@@ -4,5 +4,5 @@ pub const SIMPLIFIED_TELLER_ADDRESS: &str = "0xE0c14ACda1Ffe4274715B1c779Fb3212E
 pub const ACCOUNTANT_WITH_RATE_PROVIDERS_ADDRESS: &str =
     "0xB694Aa78CDA9E565F2d3C0A02826A8deCf1B3785";
 pub const RPC_URL: &str = "https://evm.mantrachain.io";
-pub const LAST_ACTION_RATE_FILE: &str = "last_action_rate.txt";
 pub const DEFAULT_ACTION_AMOUNT_CONTROL: &str = "1";
+pub const RECORD_FILE: &str = "record.parquet";

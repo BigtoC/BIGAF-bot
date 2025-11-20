@@ -1,5 +1,6 @@
 mod constant;
 mod contracts;
+mod record;
 mod strategies;
 
 use anyhow::Result;
@@ -18,7 +19,9 @@ async fn main() -> Result<()> {
     let private_key = env::var("PRIVATE_KEY").expect("PRIVATE_KEY must be set");
     let rpc_url = env::var("RPC_URL").unwrap_or_else(|_| constant::RPC_URL.to_string());
 
-    strategies::vault::execute_strategy(&rpc_url, &private_key).await?;
+    let action_record = strategies::vault::execute_strategy(&rpc_url, &private_key).await?;
+    info!("Persisting action record: {:?}", action_record);
+    record::append_record(action_record)?;
 
     info!("Bot execution finished.");
     Ok(())
