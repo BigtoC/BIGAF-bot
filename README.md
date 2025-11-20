@@ -1,6 +1,9 @@
 # BIGAF-bot
 Have fun!
 
+[![Release](https://github.com/BigtoC/BIGAF-bot/actions/workflows/release.yaml/badge.svg)](https://github.com/BigtoC/BIGAF-bot/actions/workflows/release.yaml)
+[![GAF Vault Bot](https://github.com/BigtoC/BIGAF-bot/actions/workflows/bot.yaml/badge.svg)](https://github.com/BigtoC/BIGAF-bot/actions/workflows/bot.yaml)
+
 ## GitHub Actions Setup
 
 To run this bot via GitHub Actions, you must configure the following secrets in your repository settings:
