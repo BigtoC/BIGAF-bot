@@ -110,7 +110,7 @@ pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<()> {
     info!("Action amount control: {}", action_amount_control);
 
     if current_rate > last_action_rate {
-        info!("Current rate > Last action rate. Checking iGAF balance...");
+        info!("Current rate > Last action rate. Start withdrawing...");
         let igaf_balance = igaf.balanceOf(my_address).call().await?;
         info!("iGAF Balance: {}", igaf_balance);
 
@@ -139,7 +139,7 @@ pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<()> {
                 info!("minimum_assets: {minimum_assets}");
 
                 let tx = teller
-                    .withdraw(igaf_address, amount_to_withdraw, minimum_assets)
+                    .withdraw(gaf_address, amount_to_withdraw, minimum_assets)
                     .send()
                     .await?
                     .watch()
@@ -159,7 +159,7 @@ pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<()> {
             );
         }
     } else if current_rate < last_action_rate {
-        info!("Current rate < Last action rate. Checking GAF balance...");
+        info!("Current rate < Last action rate. Start depositing...");
         let gaf_balance = gaf.balanceOf(my_address).call().await?;
         info!("GAF Balance: {}", gaf_balance);
 
