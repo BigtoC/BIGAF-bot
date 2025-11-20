@@ -1,0 +1,8 @@
+pub const GAF_TOKEN_ADDRESS: &str = "0x2ffd3e9f72167743AeE5d044806E711574D7A646";
+pub const IGAF_TOKEN_ADDRESS: &str = "0x94fc3dF643e643AC9294dc2B1C88Bb366587B378";
+pub const SIMPLIFIED_TELLER_ADDRESS: &str = "0xE0c14ACda1Ffe4274715B1c779Fb3212Ea89549a";
+pub const ACCOUNTANT_WITH_RATE_PROVIDERS_ADDRESS: &str =
+    "0xB694Aa78CDA9E565F2d3C0A02826A8deCf1B3785";
+pub const RPC_URL: &str = "https://evm.mantrachain.io";
+pub const LAST_ACTION_RATE_FILE: &str = "last_action_rate.txt";
+pub const DEFAULT_ACTION_AMOUNT_CONTROL: &str = "1";
