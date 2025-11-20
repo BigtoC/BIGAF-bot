@@ -1,7 +1,14 @@
 # Project Context
 
 ## Purpose
-There is a "vault" product live on MANTRA Chain mainnet, deposit [GAF token](https://blockscout.mantrascan.io/token/0x2ffd3e9f72167743AeE5d044806E711574D7A646) and I'll receive [iGAF token](https://blockscout.mantrascan.io/token/0x94fc3dF643e643AC9294dc2B1C88Bb366587B378), which is a receipt token. So this game is bascially use GAF to buy iGAF, and players can sell iGAF to GAF. In this game, players need to earn as much as GAF, a key feature is there's a random number to determinate the GAF to iGAF exchange rate, the number is set in a smart contract. This gaf-bot project will run on GitHub workflow with a cron, it'll read the last_action_rate.txt get last_action_rate, and call the smart contract get current_rate: if the current_rate > last_action_rate && my iGAF balance > 1, withdraw all (iGAF -> GAF); if current_rate < last_action_rate && GAF balance > 1, deposit all (GAF -> iGAF); otherwise, do nothing. After every action, last_action_rate.txt should be updated.
+There is a "vault" product live on MANTRA Chain mainnet, deposit [GAF token](https://blockscout.mantrascan.io/token/0x2ffd3e9f72167743AeE5d044806E711574D7A646) and I'll receive [iGAF token](https://blockscout.mantrascan.io/token/0x94fc3dF643e643AC9294dc2B1C88Bb366587B378), which is a receipt token. So this game is bascially use GAF to buy iGAF, and players can sell iGAF to GAF. 
+In this game, players need to earn as much as GAF, a key feature is there's a random number to determinate the GAF to iGAF exchange rate, the number is set in a smart contract. 
+This gaf-bot project will run on GitHub workflow with a cron, it'll read the last_action_rate.txt get last_action_rate, and call the smart contract get current_rate: 
+- if the current_rate > last_action_rate && my iGAF balance > 1, withdraw all (iGAF -> GAF); 
+- if current_rate < last_action_rate && GAF balance > 1, deposit all (GAF -> iGAF); 
+- otherwise, do nothing. 
+
+After every action, last_action_rate.txt should be updated.
 
 ## Tech Stack
 - Rust
