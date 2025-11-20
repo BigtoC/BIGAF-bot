@@ -1,0 +1,40 @@
+name: BIGAF Bot
+
+on:
+  schedule:
+    - cron: '0 * * * *' # Run every hour
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Latest Release
+        uses: dsaltares/fetch-gh-release-asset@master
+        with:
+          file: BIGAF-bot
+          target: BIGAF-bot
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Bot
+        env:
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          ACTION_AMOUNT_CONTROL: ${{ vars.ACTION_AMOUNT_CONTROL }} # Optional if using default
+        run: |
+          chmod +x BIGAF-bot
+          ./BIGAF-bot
+
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          if [[ -n $(git status -s last_action_rate.txt) ]]; then
+            git add last_action_rate.txt
+            git commit -m "update: last_action_rate [skip ci]"
+            git push
+          else
+            echo "No changes to last_action_rate.txt"
+          fi
