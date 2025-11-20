@@ -1,18 +1,19 @@
 use crate::constant::{
     ACCOUNTANT_WITH_RATE_PROVIDERS_ADDRESS, DEFAULT_ACTION_AMOUNT_CONTROL, GAF_TOKEN_ADDRESS,
-    IGAF_TOKEN_ADDRESS, LAST_ACTION_RATE_FILE, SIMPLIFIED_TELLER_ADDRESS,
+    IGAF_TOKEN_ADDRESS, SIMPLIFIED_TELLER_ADDRESS,
 };
 use crate::contracts::{
     accountant_with_rate_providers::AccountantWithRateProviders, erc20::ERC20,
     simplified_teller::SimplifiedTeller,
 };
+use crate::record::{self, Record};
 use alloy::network::EthereumWallet;
 use alloy::primitives::{Address, U256};
 use alloy::providers::ProviderBuilder;
 use alloy::signers::local::PrivateKeySigner;
-use anyhow::Result;
+use anyhow::{Result, anyhow};
+use core::panic;
 use std::env;
-use std::fs;
 use std::str::FromStr;
 use tracing::info;
 use url::Url;
@@ -65,12 +66,81 @@ fn calculate_minimum_mint(amount: U256, rate: U256) -> U256 {
         .unwrap_or(U256::ZERO)
 }
 
-fn update_last_action_rate(current_rate: U256) -> Result<()> {
-    fs::write(LAST_ACTION_RATE_FILE, current_rate.to_string())?;
-    Ok(())
+fn wei_to_decimal_string(value: U256) -> String {
+    let precision = U256::from(WEI_SCALE);
+    let integer = value / precision;
+    let fraction = value % precision;
+    format!("{}.{}", integer, format!("{fraction:018}"))
 }
 
-pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<()> {
+fn decimal_string_to_wei(value: &str) -> Result<U256> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Ok(U256::ZERO);
+    }
+
+    if trimmed.starts_with('-') {
+        return Err(anyhow!("Negative decimals are not supported: {value}"));
+    }
+
+    let (int_part, frac_part) = trimmed
+        .split_once('.')
+        .map(|(int_part, frac_part)| (int_part, frac_part))
+        .unwrap_or((trimmed, ""));
+
+    let integer = if int_part.is_empty() {
+        U256::ZERO
+    } else {
+        int_part
+            .parse::<U256>()
+            .map_err(|_| anyhow!("Invalid decimal integer part: {value}"))?
+    };
+
+    let truncated_frac = &frac_part[..frac_part.len().min(18)];
+    let mut fractional = truncated_frac.to_string();
+    if !fractional.is_empty() && fractional.chars().any(|c| !c.is_ascii_digit()) {
+        return Err(anyhow!("Invalid decimal fractional part: {value}"));
+    }
+    while fractional.len() < 18 {
+        fractional.push('0');
+    }
+
+    let fractional_value = if fractional.trim().is_empty() {
+        U256::ZERO
+    } else {
+        fractional
+            .parse::<U256>()
+            .map_err(|_| anyhow!("Invalid decimal fractional part: {value}"))?
+    };
+
+    let precision = U256::from(WEI_SCALE);
+    let scaled_integer = integer
+        .checked_mul(precision)
+        .ok_or_else(|| anyhow!("Decimal {value} exceeds supported range"))?;
+
+    Ok(scaled_integer + fractional_value)
+}
+
+fn signed_decimal_difference(current: U256, previous: U256) -> String {
+    if current >= previous {
+        wei_to_decimal_string(current - previous)
+    } else {
+        let diff = previous - current;
+        format!("-{}", wei_to_decimal_string(diff))
+    }
+}
+
+fn hold_record(current_rate: String) -> Record {
+    Record {
+        action_type: "hold".to_string(),
+        gaf_amount: None,
+        current_exchange_rate: current_rate,
+        amount_diff: None,
+        transaction_hash: None,
+    }
+}
+
+pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<Record> {
     // Setup provider
     let signer: PrivateKeySigner = private_key.parse()?;
     let wallet = EthereumWallet::from(signer.clone());
@@ -81,17 +151,27 @@ pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<()> {
     let my_address = signer.address();
     info!("Running bot with address: {}", my_address);
 
-    // Read last action rate
-    let last_action_rate_str =
-        fs::read_to_string(LAST_ACTION_RATE_FILE).unwrap_or_else(|_| "0".to_string());
-    let last_action_rate = U256::from_str(last_action_rate_str.trim()).unwrap_or(U256::ZERO);
-    info!("Last action rate: {}", last_action_rate);
+    // Read last action rate from parquet
+    let last_record = record::get_last_record()?;
+    let (last_action_rate, last_rate_decimal) = if let Some(r) = &last_record {
+        info!("Found last record: {:?}", r);
+        (
+            decimal_string_to_wei(&r.current_exchange_rate)?,
+            r.current_exchange_rate.clone(),
+        )
+    } else {
+        panic!("No previous record found");
+    };
+    info!("Last action rate (wei): {}", last_action_rate);
+    info!("Last action rate (decimal): {}", last_rate_decimal);
 
     // Get current rate
     let accountant_address = Address::from_str(ACCOUNTANT_WITH_RATE_PROVIDERS_ADDRESS)?;
     let accountant = AccountantWithRateProviders::new(accountant_address, provider.clone());
     let current_rate = accountant.getRate().call().await?;
-    info!("Current rate: {}", current_rate);
+    info!("Current rate (wei): {}", current_rate);
+    let current_rate_decimal = wei_to_decimal_string(current_rate);
+    info!("Current rate (decimal): {}", current_rate_decimal);
 
     // Setup other contracts
     let gaf_address = Address::from_str(GAF_TOKEN_ADDRESS)?;
@@ -124,39 +204,57 @@ pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<()> {
                     amount_to_withdraw, igaf_balance, buffer
                 );
 
-                // Approve iGAF to Teller
-                let tx = igaf
-                    .approve(teller_address, amount_to_withdraw)
+                igaf.approve(teller_address, amount_to_withdraw)
                     .send()
                     .await?
                     .watch()
                     .await?;
-                info!("Approved iGAF: {:?}", tx);
+                info!("Approved iGAF for teller");
 
-                // Withdraw
-                // minimumAssets = shareAmount * rate / 1e18
                 let minimum_assets = calculate_minimum_assets(amount_to_withdraw, current_rate);
                 info!("minimum_assets: {minimum_assets}");
 
-                let tx = teller
+                let withdraw_tx_hash = teller
                     .withdraw(gaf_address, amount_to_withdraw, minimum_assets)
                     .send()
                     .await?
                     .watch()
                     .await?;
-                info!("Withdrawn iGAF: {:?}", tx);
+                info!("Withdrawn iGAF: {withdraw_tx_hash:#x}");
 
-                // Update last action rate
-                update_last_action_rate(current_rate)?;
-                info!("Updated last_action_rate.txt to {}", current_rate);
+                let gaf_amount_u256 = calculate_minimum_assets(amount_to_withdraw, current_rate);
+                let gaf_amount = wei_to_decimal_string(gaf_amount_u256);
+                let last_withdraw = record::get_last_withdraw_amount()?;
+                let amount_diff = if let Some(last) = last_withdraw {
+                    let last_wei = decimal_string_to_wei(&last)?;
+                    Some(signed_decimal_difference(gaf_amount_u256, last_wei))
+                } else {
+                    None
+                };
+
+                let summary = Record {
+                    action_type: "withdraw".to_string(),
+                    gaf_amount: Some(gaf_amount.clone()),
+                    current_exchange_rate: current_rate_decimal.clone(),
+                    amount_diff,
+                    transaction_hash: Some(format!("{withdraw_tx_hash:#x}")),
+                };
+                info!("Action result: {:?}", summary);
+                return Ok(summary);
             } else {
                 info!("Calculated withdraw amount is 0 or insufficient balance for fixed amount.");
+                let summary = hold_record(current_rate_decimal.clone());
+                info!("Action result: {:?}", summary);
+                return Ok(summary);
             }
         } else {
             info!(
                 "Not enough iGAF to withdraw (balance {} <= buffer {}).",
                 igaf_balance, buffer
             );
+            let summary = hold_record(current_rate_decimal.clone());
+            info!("Action result: {:?}", summary);
+            return Ok(summary);
         }
     } else if current_rate < last_action_rate {
         info!("Current rate < Last action rate. Start depositing...");
@@ -173,43 +271,54 @@ pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<()> {
                     amount_to_deposit, gaf_balance, buffer
                 );
 
-                // Approve GAF to Teller
-                let tx = gaf
-                    .approve(igaf_address, amount_to_deposit)
+                gaf.approve(igaf_address, amount_to_deposit)
                     .send()
                     .await?
                     .watch()
                     .await?;
-                info!("Approved GAF: {:?}", tx);
+                info!("Approved GAF for teller");
 
-                // Deposit
-                // minimumMint = depositAmount * 1e18 / rate
                 let minimum_mint = calculate_minimum_mint(amount_to_deposit, current_rate);
                 info!("minimum_mint: {minimum_mint}");
 
-                let tx = teller
+                let deposit_tx_hash = teller
                     .deposit(gaf_address, amount_to_deposit, minimum_mint)
                     .send()
                     .await?
                     .watch()
                     .await?;
-                info!("Deposited GAF: {:?}", tx);
+                info!("Deposited GAF: {deposit_tx_hash:#x}");
 
-                // Update last action rate
-                update_last_action_rate(current_rate)?;
-                info!("Updated last_action_rate.txt to {}", current_rate);
+                let gaf_amount = wei_to_decimal_string(amount_to_deposit);
+
+                let summary = Record {
+                    action_type: "deposit".to_string(),
+                    gaf_amount: Some(gaf_amount.clone()),
+                    current_exchange_rate: current_rate_decimal.clone(),
+                    amount_diff: None,
+                    transaction_hash: Some(format!("{deposit_tx_hash:#x}")),
+                };
+                info!("Action result: {:?}", summary);
+                return Ok(summary);
             } else {
                 info!("Calculated deposit amount is 0 or insufficient balance for fixed amount.");
+                let summary = hold_record(current_rate_decimal.clone());
+                info!("Action result: {:?}", summary);
+                return Ok(summary);
             }
         } else {
             info!(
                 "Not enough GAF to deposit (balance {} <= buffer {}).",
                 gaf_balance, buffer
             );
+            let summary = hold_record(current_rate_decimal.clone());
+            info!("Action result: {:?}", summary);
+            return Ok(summary);
         }
     } else {
         info!("Rates are equal or no action condition met.");
+        let summary = hold_record(current_rate_decimal);
+        info!("Action result: {:?}", summary);
+        Ok(summary)
     }
-
-    Ok(())
 }
