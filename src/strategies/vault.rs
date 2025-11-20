@@ -189,8 +189,8 @@ pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<Record
     let action_amount_control: f64 = action_amount_control_str.parse().unwrap_or(1.0);
     info!("Action amount control: {}", action_amount_control);
 
-    if current_rate > last_action_rate {
-        info!("Current rate > Last action rate. Start withdrawing...");
+    if current_rate > last_action_rate && current_rate > U256::from(WEI_SCALE) {
+        info!("Current rate > Last action rate && current_rate > 1. Start withdrawing...");
         let igaf_balance = igaf.balanceOf(my_address).call().await?;
         info!("iGAF Balance: {}", igaf_balance);
 
