@@ -1,6 +1,16 @@
 # BIGAF-bot
 Have fun!
 
+## GitHub Actions Setup
+
+To run this bot via GitHub Actions, you must configure the following secrets in your repository settings:
+
+- `PRIVATE_KEY`: The private key of the wallet that will execute the transactions.
+
+Optional secrets/variables:
+- `RPC_URL`: Custom RPC URL (defaults to Mantra Chain mainnet).
+- `ACTION_AMOUNT_CONTROL`: Control the transaction amount (1 = full, <1 = percentage, >1 = fixed amount).
+
 Project Initialized with [OpenSpec](https://openspec.dev).
 ```shell
 openspec init  
