@@ -1,9 +1,12 @@
-name: BIGAF Bot
+name: GAF Vault Bot
 
 on:
   schedule:
     - cron: '0 * * * *' # Run every hour
   workflow_dispatch: # Allow manual trigger
+
+permissions:
+  contents: write
 
 jobs:
   run-bot:
