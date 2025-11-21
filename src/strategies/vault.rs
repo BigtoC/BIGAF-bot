@@ -15,6 +15,7 @@ use anyhow::{Result, anyhow};
 use core::panic;
 use std::env;
 use std::str::FromStr;
+use chrono::Utc;
 use tracing::info;
 use url::Url;
 
@@ -132,6 +133,7 @@ fn signed_decimal_difference(current: U256, previous: U256) -> String {
 
 fn hold_record(current_rate: String) -> Record {
     Record {
+        timestamp: Option::from(Utc::now().to_rfc3339()),
         action_type: "hold".to_string(),
         gaf_amount: None,
         current_exchange_rate: current_rate,
@@ -233,6 +235,7 @@ pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<Record
                 };
 
                 let summary = Record {
+                    timestamp: Option::from(Utc::now().to_rfc3339()),
                     action_type: "withdraw".to_string(),
                     gaf_amount: Some(gaf_amount.clone()),
                     current_exchange_rate: current_rate_decimal.clone(),
@@ -292,6 +295,7 @@ pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<Record
                 let gaf_amount = wei_to_decimal_string(amount_to_deposit);
 
                 let summary = Record {
+                    timestamp: Option::from(Utc::now().to_rfc3339()),
                     action_type: "deposit".to_string(),
                     gaf_amount: Some(gaf_amount.clone()),
                     current_exchange_rate: current_rate_decimal.clone(),
