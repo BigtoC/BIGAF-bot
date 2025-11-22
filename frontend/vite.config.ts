@@ -10,6 +10,7 @@ const dirname = typeof __dirname !== 'undefined'
 
 export default defineConfig({
   plugins: [react()],
+  base: '/BIGAF-bot/',
   resolve: {
     alias: {
       '@': path.resolve(dirname, './src')
