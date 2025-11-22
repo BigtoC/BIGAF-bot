@@ -3,6 +3,7 @@ import ReactECharts from 'echarts-for-react';
 import { useAccount, useConnect, useDisconnect } from 'wagmi';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ModeToggle } from '@/components/mode-toggle';
 
 const Dashboard: React.FC = () => {
   const { address, isConnected } = useAccount();
@@ -35,7 +36,8 @@ const Dashboard: React.FC = () => {
     <div className="p-8 space-y-8">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">BIGAF Bot Dashboard</h1>
-        <div>
+        <div className="flex items-center gap-4">
+          <ModeToggle />
           {isConnected ? (
             <div className="flex items-center gap-4">
               <span>{address?.slice(0, 6)}...{address?.slice(-4)}</span>
