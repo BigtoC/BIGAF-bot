@@ -1,6 +1,7 @@
 use crate::constant::{
-    ACCOUNTANT_WITH_RATE_PROVIDERS_ADDRESS, DEFAULT_ACTION_AMOUNT_CONTROL, GAF_TOKEN_ADDRESS,
-    IGAF_TOKEN_ADDRESS, SIMPLIFIED_TELLER_ADDRESS,
+    ACCOUNTANT_WITH_RATE_PROVIDERS_ADDRESS, DEFAULT_ACTION_AMOUNT_CONTROL,
+    DEFAULT_MAX_DEPOSIT_RATE, DEFAULT_MIN_WITHDRAW_RATE, GAF_TOKEN_ADDRESS, IGAF_TOKEN_ADDRESS,
+    SIMPLIFIED_TELLER_ADDRESS,
 };
 use crate::contracts::{
     accountant_with_rate_providers::AccountantWithRateProviders, erc20::ERC20,
@@ -12,10 +13,10 @@ use alloy::primitives::{Address, U256};
 use alloy::providers::ProviderBuilder;
 use alloy::signers::local::PrivateKeySigner;
 use anyhow::{Result, anyhow};
+use chrono::Utc;
 use core::panic;
 use std::env;
 use std::str::FromStr;
-use chrono::Utc;
 use tracing::info;
 use url::Url;
 
@@ -154,9 +155,9 @@ pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<Record
     info!("Running bot with address: {}", my_address);
 
     // Read last action rate from parquet
-    let last_record = record::get_last_record()?;
+    let last_record = record::get_last_non_hold_record()?;
     let (last_action_rate, last_rate_decimal) = if let Some(r) = &last_record {
-        info!("Found last record: {:?}", r);
+        info!("Found last non hold record: {:?}", r);
         (
             decimal_string_to_wei(&r.current_exchange_rate)?,
             r.current_exchange_rate.clone(),
@@ -164,8 +165,16 @@ pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<Record
     } else {
         panic!("No previous record found");
     };
-    info!("Last action rate (wei): {}", last_action_rate);
-    info!("Last action rate (decimal): {}", last_rate_decimal);
+
+    let last_action_type = &last_record.unwrap().action_type;
+    info!(
+        "Last action is {last_action_type}, rate in wei: {}",
+        last_action_rate
+    );
+    info!(
+        "Last action is {last_action_type}, rate with decimals: {}",
+        last_rate_decimal
+    );
 
     // Get current rate
     let accountant_address = Address::from_str(ACCOUNTANT_WITH_RATE_PROVIDERS_ADDRESS)?;
@@ -191,8 +200,35 @@ pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<Record
     let action_amount_control: f64 = action_amount_control_str.parse().unwrap_or(1.0);
     info!("Action amount control: {}", action_amount_control);
 
-    if current_rate > last_action_rate && current_rate > U256::from(1 * WEI_SCALE) {
-        info!("Current rate > Last action rate && current_rate > 1. Start withdrawing...");
+    let max_deposit_rate: f64 = env::var("MAX_DEPOSIT_RATE")
+        .unwrap_or_else(|_| DEFAULT_MAX_DEPOSIT_RATE.to_string())
+        .parse()
+        .unwrap_or(DEFAULT_MAX_DEPOSIT_RATE);
+    let min_withdraw_rate: f64 = env::var("MIN_WITHDRAW_RATE")
+        .unwrap_or_else(|_| DEFAULT_MIN_WITHDRAW_RATE.to_string())
+        .parse()
+        .unwrap_or(DEFAULT_MIN_WITHDRAW_RATE);
+    // Make sure every withdrawal yields some profit
+    if min_withdraw_rate < 1.0 {
+        panic!("MIN_WITHDRAW_RATE must be >= 1.0");
+    }
+
+    info!(
+        "MAX_DEPOSIT_RATE:      {}",
+        U256::from(max_deposit_rate * WEI_SCALE_F64)
+    );
+    info!(
+        "MIN_WITHDRAW_RATE:     {}",
+        U256::from(min_withdraw_rate * WEI_SCALE_F64)
+    );
+    info!("Current Exchange Rate: {}", current_rate);
+    // Execute strategy
+    if current_rate > last_action_rate
+        && current_rate > U256::from(min_withdraw_rate * WEI_SCALE_F64)
+    {
+        info!(
+            "Current rate > Last action rate && current_rate > {min_withdraw_rate}. Start withdrawing..."
+        );
         let igaf_balance = igaf.balanceOf(my_address).call().await?;
         info!("iGAF Balance: {}", igaf_balance);
 
@@ -243,12 +279,12 @@ pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<Record
                     transaction_hash: Some(format!("{withdraw_tx_hash:#x}")),
                 };
                 info!("Action result: {:?}", summary);
-                return Ok(summary);
+                Ok(summary)
             } else {
                 info!("Calculated withdraw amount is 0 or insufficient balance for fixed amount.");
                 let summary = hold_record(current_rate_decimal.clone());
                 info!("Action result: {:?}", summary);
-                return Ok(summary);
+                Ok(summary)
             }
         } else {
             info!(
@@ -257,14 +293,18 @@ pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<Record
             );
             let summary = hold_record(current_rate_decimal.clone());
             info!("Action result: {:?}", summary);
-            return Ok(summary);
+            Ok(summary)
         }
-    } else if current_rate < last_action_rate {
-        info!("Current rate < Last action rate. Start depositing...");
+    } else if current_rate < last_action_rate
+        && current_rate < U256::from(max_deposit_rate * WEI_SCALE_F64)
+    {
+        info!(
+            "Current rate < Last action rate && current_rate < {max_deposit_rate}. Start depositing..."
+        );
         let gaf_balance = gaf.balanceOf(my_address).call().await?;
         info!("GAF Balance: {}", gaf_balance);
 
-        if let Some(available_balance) = available_after_buffer(gaf_balance, buffer) {
+        return if let Some(available_balance) = available_after_buffer(gaf_balance, buffer) {
             let amount_to_deposit =
                 calculate_action_amount(available_balance, action_amount_control);
 
@@ -303,12 +343,12 @@ pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<Record
                     transaction_hash: Some(format!("{deposit_tx_hash:#x}")),
                 };
                 info!("Action result: {:?}", summary);
-                return Ok(summary);
+                Ok(summary)
             } else {
                 info!("Calculated deposit amount is 0 or insufficient balance for fixed amount.");
                 let summary = hold_record(current_rate_decimal.clone());
                 info!("Action result: {:?}", summary);
-                return Ok(summary);
+                Ok(summary)
             }
         } else {
             info!(
@@ -317,8 +357,8 @@ pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<Record
             );
             let summary = hold_record(current_rate_decimal.clone());
             info!("Action result: {:?}", summary);
-            return Ok(summary);
-        }
+            Ok(summary)
+        };
     } else {
         info!("Rates are equal or no action condition met.");
         let summary = hold_record(current_rate_decimal);
