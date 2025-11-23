@@ -82,12 +82,15 @@ fn enforce_schema(df: &mut DataFrame) -> Result<()> {
     Ok(())
 }
 
-pub fn get_last_record() -> Result<Option<Record>> {
+// Get last non hold record
+pub fn get_last_non_hold_record() -> Result<Option<Record>> {
     if !Path::new(RECORD_FILE).exists() {
         return Ok(None);
     }
 
-    let df = LazyFrame::scan_parquet(RECORD_FILE, ScanArgsParquet::default())?.collect()?;
+    let df = LazyFrame::scan_parquet(RECORD_FILE, ScanArgsParquet::default())?
+        .filter(col("action_type").neq(lit("hold")))
+        .collect()?;
 
     if df.height() == 0 {
         return Ok(None);

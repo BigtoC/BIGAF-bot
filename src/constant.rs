@@ -6,3 +6,5 @@ pub const ACCOUNTANT_WITH_RATE_PROVIDERS_ADDRESS: &str =
 pub const RPC_URL: &str = "https://evm.mantrachain.io";
 pub const DEFAULT_ACTION_AMOUNT_CONTROL: &str = "1";
 pub const RECORD_FILE: &str = "record.parquet";
+pub const DEFAULT_MAX_DEPOSIT_RATE: f64 = 1.5;
+pub const DEFAULT_MIN_WITHDRAW_RATE: f64 = 1.0;
