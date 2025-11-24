@@ -8,7 +8,9 @@ Have fun!
 
 To run this bot via GitHub Actions, you must configure the following secrets in your repository settings:
 
-- `PRIVATE_KEY`: The private key of the wallet that will execute the transactions.
+- `PRIVATE_KEY`: The private key of the wallet that will execute the transactions. 
+- `MAX_DEPOSIT_RATE`: The maximum exchange rate threshold to trigger deposits (e.g., 2.2). 
+- `MIN_WITHDRAW_RATE`: The minimum exchange rate threshold to trigger withdrawals (e.g., 1.8).
 
 Optional secrets/variables:
 - `RPC_URL`: Custom RPC URL (defaults to Mantra Chain mainnet).

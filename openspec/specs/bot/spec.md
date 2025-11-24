@@ -47,12 +47,13 @@ The bot SHALL execute a strategy based on the comparison between the current exc
 - **THEN** do nothing
 
 ### Requirement: Automated Execution
-The bot SHALL execute automatically on a defined schedule using GitHub Actions.
+The bot SHALL execute automatically on a defined schedule using the pre-built binary from the latest GitHub Release.
 
 #### Scenario: Scheduled Run
 - **WHEN** the cron schedule triggers (e.g., hourly)
-- **THEN** the bot executes the strategy
-- **AND** uses the `PRIVATE_KEY` from GitHub Secrets
+- **THEN** download the binary from the latest GitHub Release
+- **AND** execute the binary
+- **AND** pass `PRIVATE_KEY` and other env vars
 
 #### Scenario: State Persistence
 - **WHEN** `last_action_rate.txt` is updated during execution
@@ -87,3 +88,11 @@ The bot SHALL log detailed information about its decision-making process and sta
 - **THEN** log the `current_rate`, `last_action_rate`, calculated `amount_diff`, the decision (`action_type`), and the action summary returned from the strategy
 - **AND** log the resulting transaction hash (if a transaction was sent)
 
+### Requirement: Release Management
+The system SHALL automatically build and release the binary artifact upon version tagging.
+
+#### Scenario: Build and Release
+- **WHEN** a new tag is pushed (e.g., `v1.0.0`)
+- **THEN** build the Rust binary in release mode
+- **AND** create a GitHub Release with the tag name
+- **AND** upload the binary to the release assets

@@ -11,6 +11,9 @@ The system SHALL provide a web-based dashboard to visualize bot data and interac
 - **THEN** the dashboard loads successfully
 - **AND** displays a chart using Apache ECharts
 - **AND** shows a wallet connection option
+- **AND** the Current Status card shows Last Action Rate, Last Action Type, and Current Rate derived from the latest `record.parquet` data
+- **AND** the Bot Status field displays **Active** in green text when the newest record timestamp is within two hours of the current time
+- **AND** the Bot Status field displays **Paused** in yellow text when the newest record timestamp is older than two hours
 
 ### Requirement: Automated Deployment
 The system SHALL automatically deploy the frontend to GitHub Pages upon changes to the `frontend/` directory on the `main` branch.
@@ -38,4 +41,34 @@ The system SHALL allow users to switch between light and dark visual themes.
 #### Scenario: System Preference
 - **WHEN** the user selects "System" from the theme toggle
 - **THEN** the application interface matches the operating system's color scheme
+
+### Requirement: Fetch and Parse Parquet Data
+The system SHALL fetch the `record.parquet` file from the configured URL and parse it into a usable format in the frontend.
+
+#### Scenario: Load Data on Init
+- **WHEN** the Dashboard component mounts
+- **THEN** the application fetches `record.parquet` from `https://github.com/BigtoC/BIGAF-bot/raw/refs/heads/main/record.parquet`
+- **AND** parses the binary content into a list of records containing `timestamp`, `current_exchange_rate`, `gaf_amount`, and `action_type`.
+
+### Requirement: Render Stacked Line Chart
+The system SHALL render a chart using ECharts with two specific series based on the parsed data.
+
+#### Scenario: Display Exchange Rate
+- **WHEN** the chart renders
+- **THEN** the first series displays `current_exchange_rate` as a line
+- **AND** the original decimal precision is preserved.
+
+#### Scenario: Display Action Amounts
+- **WHEN** the chart renders
+- **THEN** the second series displays `gaf_amount`
+- **AND** the series maintains the last known value between actions so the line never drops to zero between transactions
+- **AND** 'deposit' points are colored Pink
+- **AND** 'withdraw' points are colored Black.
+
+### Requirement: Time Range Filtering
+The system SHALL allow the user to filter the displayed data by time range.
+
+#### Scenario: Select Time Range
+- **WHEN** the user selects a time range (24H, 7 Days, 30 Days, All)
+- **THEN** the chart updates to show only data points within that range relative to the latest data point or current time.
 

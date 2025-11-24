@@ -2282,6 +2282,11 @@ function-bind@^1.1.2:
   resolved "https://registry.yarnpkg.com/function-bind/-/function-bind-1.1.2.tgz#2c02d864d97f3ea6c8830c464cbd11ab6eab7a1c"
   integrity sha512-7XHNxH7qX9xG5mIwxkhumTox/MIRNcOgDrxWsMt2pAr23WHp6MrRlN7FBSFpCpr+oVO0F744iUgR82nJMfG2SA==
 
+fzstd@0.1.1:
+  version "0.1.1"
+  resolved "https://registry.yarnpkg.com/fzstd/-/fzstd-0.1.1.tgz#a3da29f2fff45070ca90073f866d97e0c56a4a52"
+  integrity sha512-dkuVSOKKwh3eas5VkJy1AW1vFpet8TA/fGmVA5krThl8YcOVE/8ZIoEA1+U1vEn5ckxxhLirSdY837azmbaNHA==
+
 gensync@^1.0.0-beta.2:
   version "1.0.0-beta.2"
   resolved "https://registry.yarnpkg.com/gensync/-/gensync-1.0.0-beta.2.tgz#32a6ee76c3d7f52d46b2b1ae5d93fea8580a25e0"
@@ -2366,6 +2371,24 @@ html-escaper@^2.0.0:
   version "2.0.2"
   resolved "https://registry.yarnpkg.com/html-escaper/-/html-escaper-2.0.2.tgz#dfd60027da36a36dfcbe236262c00a5822681453"
   integrity sha512-H2iMtd0I4Mt5eYiapRdIDjp+XzelXQ0tFE4JS7YFwFevXXMmOp9myNrUvCg0D6ws8iqkRPBfKHgbwig1SmlLfg==
+
+hyparquet-compressors@^1.1.1:
+  version "1.1.1"
+  resolved "https://registry.yarnpkg.com/hyparquet-compressors/-/hyparquet-compressors-1.1.1.tgz#35ab916d4ee3306000279126a937e9a1633725a6"
+  integrity sha512-yx7aA3Rhj0YycbdV71+XznQSLAefa4cT0urpgNXy4aM6eSeCknaVDNne8y45Uz74Fb15yyXUzOStlceOJBan7A==
+  dependencies:
+    fzstd "0.1.1"
+    hysnappy "1.0.0"
+
+hyparquet@^1.21.0:
+  version "1.21.0"
+  resolved "https://registry.yarnpkg.com/hyparquet/-/hyparquet-1.21.0.tgz#b210ac6d5ce60beeace31aa6efbff89b0bdc766b"
+  integrity sha512-7AgWwXQy9sNRkPQksY+oeDEIdZNDSYeRy01T1YseJm+7MJpREGYVN1yLvHIoukHQaaTYYfzTzAX4nNOTiaffQw==
+
+hysnappy@1.0.0:
+  version "1.0.0"
+  resolved "https://registry.yarnpkg.com/hysnappy/-/hysnappy-1.0.0.tgz#c68dce897995dc17d8433231919c2bb80c702822"
+  integrity sha512-MNrC4NfwDGPb889O6gIfEtbvEZCSWUsSEhsz4Oq2FRcpGtXHfeVz3KciSPp5Pnnz1NjFMgDQNfxdJozymJEDDA==
 
 ignore@^5.2.0:
   version "5.3.2"
