@@ -54,29 +54,39 @@ export function BotChart({ data }: BotChartProps) {
         }
       }));
 
-    let lastGafValue = 0;
-    const amountData = sortedData.map(d => {
-      const isAction = d.action_type === 'deposit' || d.action_type === 'withdraw';
-      const pointColor = d.action_type === 'deposit' ? 'red' : 'black';
+    const amountData = sortedData.reduce<{
+      points: {
+        value: [number, number];
+        symbol: 'circle';
+        symbolSize: number;
+        itemStyle: { color: string; borderColor: string; borderWidth: number };
+        tooltip: { formatter: () => string };
+      }[];
+      lastValue: number;
+    }>(
+      (acc, d) => {
+        const isAction = d.action_type === 'deposit' || d.action_type === 'withdraw';
+        const pointColor = d.action_type === 'deposit' ? 'red' : 'black';
+        const nextValue = isAction ? d.gaf_amount : acc.lastValue;
 
-      if (isAction) {
-        lastGafValue = d.gaf_amount;
-      }
+        acc.points.push({
+          value: [d.timestamp, nextValue],
+          symbol: 'circle',
+          symbolSize: isAction ? 8 : 0,
+          itemStyle: {
+            color: isAction ? pointColor : gafColor,
+            borderColor: '#ffffff',
+            borderWidth: 2
+          },
+          tooltip: {
+            formatter: () => `${d.action_type}: ${d.gaf_amount}`
+          }
+        });
 
-      return {
-        value: [d.timestamp, lastGafValue],
-        symbol: 'circle',
-        symbolSize: isAction ? 8 : 0,
-        itemStyle: {
-          color: isAction ? pointColor : gafColor,
-          borderColor: '#ffffff',
-          borderWidth: 2
-        },
-        tooltip: {
-          formatter: () => `${d.action_type}: ${d.gaf_amount}`
-        }
-      };
-    });
+        return { points: acc.points, lastValue: nextValue };
+      },
+      { points: [], lastValue: 0 }
+    ).points;
 
     return {
       tooltip: {
