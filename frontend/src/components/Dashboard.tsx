@@ -1,36 +1,24 @@
 import React from 'react';
-import ReactECharts from 'echarts-for-react';
+import { useQuery } from '@tanstack/react-query';
 import { useAccount, useConnect, useDisconnect } from 'wagmi';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ModeToggle } from '@/components/mode-toggle';
+import { BotChart } from './BotChart';
+import { fetchAndParseParquet } from '@/lib/parquet';
+
+const RECORD_URL = 'https://raw.githubusercontent.com/BigtoC/BIGAF-bot/main/record.parquet';
 
 const Dashboard: React.FC = () => {
   const { address, isConnected } = useAccount();
   const { connectors, connect } = useConnect();
   const { disconnect } = useDisconnect();
 
-  const option = {
-    title: {
-      text: 'Exchange Rate History'
-    },
-    tooltip: {
-      trigger: 'axis'
-    },
-    xAxis: {
-      type: 'category',
-      data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-    },
-    yAxis: {
-      type: 'value'
-    },
-    series: [
-      {
-        data: [1.2, 1.3, 1.1, 1.4, 1.5, 1.3, 1.6],
-        type: 'line'
-      }
-    ]
-  };
+  const { data: chartData, isLoading, error } = useQuery({
+    queryKey: ['bot-records'],
+    queryFn: () => fetchAndParseParquet(RECORD_URL),
+    retry: 1,
+  });
 
   return (
     <div className="p-8 space-y-8">
@@ -100,14 +88,15 @@ const Dashboard: React.FC = () => {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Rate History</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ReactECharts option={option} />
-        </CardContent>
-      </Card>
+      {isLoading ? (
+        <div className="flex justify-center p-8">Loading chart data...</div>
+      ) : error ? (
+        <div className="flex justify-center p-8 text-destructive">
+          Failed to load chart data. Please refresh to try again.
+        </div>
+      ) : (
+        <BotChart data={chartData || []} />
+      )}
     </div>
   );
 };
