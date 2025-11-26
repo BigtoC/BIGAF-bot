@@ -162,7 +162,7 @@ const Dashboard: React.FC = () => {
                 <span className="font-mono">{formatActionType(statusInfo.lastActionType)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Current Rate:</span>
+                <span className="text-muted-foreground">Last Exchange Rate:</span>
                 <span className="font-mono">{formatRate(statusInfo.currentRate)}</span>
               </div>
               <div className="flex justify-between">
