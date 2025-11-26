@@ -4,6 +4,24 @@ Have fun!
 [![Release](https://github.com/BigtoC/BIGAF-bot/actions/workflows/release.yaml/badge.svg)](https://github.com/BigtoC/BIGAF-bot/actions/workflows/release.yaml)
 [![GAF Vault Bot](https://github.com/BigtoC/BIGAF-bot/actions/workflows/bot.yaml/badge.svg)](https://github.com/BigtoC/BIGAF-bot/actions/workflows/bot.yaml)
 
+## Contribution
+### Branch Naming
+Since this is a multi-apps monorepo, to ensure clarity and organization across the repository, I suggest when creating a new branch for a service, follow this naming convention:
+`app-name/type/following-names`
+
+For example:
+- `bot/fix/calculation-error`
+- `frontend/feature/display-beautiful-chart`
+- `bot/doc/update-comments`
+  If the branch is not specific to a service, you can use a more general name:
+- `doc/update-spec-doc`
+- `ci/add-steps`
+
+### PR title
+Suggestion:
+- For a service: `Problem(service-name): short description of the problem`
+- General: `Problem(ci): Build time too long`
+
 ## GitHub Actions Setup
 
 To run this bot via GitHub Actions, you must configure the following secrets in your repository settings:
@@ -15,6 +33,8 @@ To run this bot via GitHub Actions, you must configure the following secrets in 
 Optional secrets/variables:
 - `RPC_URL`: Custom RPC URL (defaults to Mantra Chain mainnet).
 - `ACTION_AMOUNT_CONTROL`: Control the transaction amount (1 = full, <1 = percentage, >1 = fixed amount).
+
+## Project Initial Setup
 
 Project Initialized with [OpenSpec](https://openspec.dev).
 ```shell
