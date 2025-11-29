@@ -242,6 +242,38 @@ pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<Record
                     amount_to_withdraw, igaf_balance, buffer
                 );
 
+                let minimum_assets = calculate_minimum_assets(amount_to_withdraw, current_rate);
+                info!("minimum_assets: {minimum_assets}");
+
+                // Simulate the approval transaction
+                info!("Simulating iGAF approve transaction...");
+                match igaf.approve(teller_address, amount_to_withdraw).call().await {
+                    Ok(_) => info!("Approve simulation succeeded"),
+                    Err(e) => {
+                        info!("Approve simulation failed: {e}. Aborting withdrawal.");
+                        let summary = hold_record(current_rate_decimal.clone());
+                        info!("Action result: {:?}", summary);
+                        return Ok(summary);
+                    }
+                }
+
+                // Simulate the withdrawal transaction
+                info!("Simulating withdraw transaction...");
+                match teller
+                    .withdraw(gaf_address, amount_to_withdraw, minimum_assets)
+                    .call()
+                    .await
+                {
+                    Ok(_) => info!("Withdraw simulation succeeded"),
+                    Err(e) => {
+                        info!("Withdraw simulation failed: {e}. Aborting withdrawal.");
+                        let summary = hold_record(current_rate_decimal.clone());
+                        info!("Action result: {:?}", summary);
+                        return Ok(summary);
+                    }
+                }
+
+                // Execute the actual approve transaction
                 igaf.approve(teller_address, amount_to_withdraw)
                     .send()
                     .await?
@@ -249,9 +281,7 @@ pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<Record
                     .await?;
                 info!("Approved iGAF for teller");
 
-                let minimum_assets = calculate_minimum_assets(amount_to_withdraw, current_rate);
-                info!("minimum_assets: {minimum_assets}");
-
+                // Execute the actual withdraw transaction
                 let withdraw_tx_hash = teller
                     .withdraw(gaf_address, amount_to_withdraw, minimum_assets)
                     .send()
@@ -314,6 +344,38 @@ pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<Record
                     amount_to_deposit, gaf_balance, buffer
                 );
 
+                let minimum_mint = calculate_minimum_mint(amount_to_deposit, current_rate);
+                info!("minimum_mint: {minimum_mint}");
+
+                // Simulate the approval transaction
+                info!("Simulating GAF approve transaction...");
+                match gaf.approve(igaf_address, amount_to_deposit).call().await {
+                    Ok(_) => info!("Approve simulation succeeded"),
+                    Err(e) => {
+                        info!("Approve simulation failed: {e}. Aborting deposit.");
+                        let summary = hold_record(current_rate_decimal.clone());
+                        info!("Action result: {:?}", summary);
+                        return Ok(summary);
+                    }
+                }
+
+                // Simulate the deposit transaction
+                info!("Simulating deposit transaction...");
+                match teller
+                    .deposit(gaf_address, amount_to_deposit, minimum_mint)
+                    .call()
+                    .await
+                {
+                    Ok(_) => info!("Deposit simulation succeeded"),
+                    Err(e) => {
+                        info!("Deposit simulation failed: {e}. Aborting deposit.");
+                        let summary = hold_record(current_rate_decimal.clone());
+                        info!("Action result: {:?}", summary);
+                        return Ok(summary);
+                    }
+                }
+
+                // Execute the actual approve transaction
                 gaf.approve(igaf_address, amount_to_deposit)
                     .send()
                     .await?
@@ -321,9 +383,7 @@ pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<Record
                     .await?;
                 info!("Approved GAF for teller");
 
-                let minimum_mint = calculate_minimum_mint(amount_to_deposit, current_rate);
-                info!("minimum_mint: {minimum_mint}");
-
+                // Execute the actual deposit transaction
                 let deposit_tx_hash = teller
                     .deposit(gaf_address, amount_to_deposit, minimum_mint)
                     .send()
