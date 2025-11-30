@@ -14,10 +14,9 @@ use alloy::providers::{Provider, ProviderBuilder};
 use alloy::signers::local::PrivateKeySigner;
 use anyhow::{Result, anyhow};
 use chrono::Utc;
-use core::panic;
 use std::env;
 use std::str::FromStr;
-use tracing::info;
+use tracing::{error, info};
 use url::Url;
 
 const WEI_SCALE: u128 = 1_000_000_000_000_000_000;
@@ -369,6 +368,19 @@ where
 }
 
 pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<Record> {
+    match execute_strategy_internal(rpc_url, private_key).await {
+        Ok(record) => Ok(record),
+        Err(e) => {
+            error!("Strategy execution failed: {:?}", e);
+            Ok(hold_record(
+                "0.000000000000000000".to_string(),
+                &e.to_string(),
+            ))
+        }
+    }
+}
+
+async fn execute_strategy_internal(rpc_url: &str, private_key: &str) -> Result<Record> {
     // Setup provider
     let signer: PrivateKeySigner = private_key.parse()?;
     let wallet = EthereumWallet::from(signer.clone());
@@ -388,7 +400,7 @@ pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<Record
             r.current_exchange_rate.clone(),
         )
     } else {
-        panic!("No previous record found");
+        return Err(anyhow!("No previous record found"));
     };
 
     let last_action_type = &last_record.unwrap().action_type;
@@ -435,7 +447,7 @@ pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<Record
         .unwrap_or(DEFAULT_MIN_WITHDRAW_RATE);
     // Make sure every withdrawal yields some profit
     if min_withdraw_rate < 1.0 {
-        panic!("MIN_WITHDRAW_RATE must be >= 1.0");
+        return Err(anyhow!("MIN_WITHDRAW_RATE must be >= 1.0"));
     }
 
     info!(
