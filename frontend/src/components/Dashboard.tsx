@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Github } from 'lucide-react';
 import { useAccount, useConnect, useDisconnect } from 'wagmi';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -126,6 +127,16 @@ const Dashboard: React.FC = () => {
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">BIGAF Bot Dashboard</h1>
         <div className="flex items-center gap-4">
+          <Button variant="outline" size="icon" asChild>
+            <a
+              href="https://github.com/BigtoC/BIGAF-bot"
+              target="_blank"
+              rel="noreferrer noopener"
+            >
+              <Github className="h-4 w-4" aria-hidden="true" />
+              <span className="sr-only">Open GitHub repository</span>
+            </a>
+          </Button>
           <ModeToggle />
           {isConnected ? (
             <div className="flex items-center gap-4">
