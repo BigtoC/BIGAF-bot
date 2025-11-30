@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ModeToggle } from '@/components/mode-toggle';
 import { BotChart } from './BotChart';
+import { HistoryTable } from './HistoryTable';
 import { fetchAndParseParquet } from '@/lib/parquet';
 import type { BotRecord } from '@/lib/parquet';
 
@@ -199,7 +200,17 @@ const Dashboard: React.FC = () => {
           Failed to load chart data. Please refresh to try again.
         </div>
       ) : (
-        <BotChart data={chartData || []} />
+        <>
+          <BotChart data={chartData || []} />
+          <Card>
+            <CardHeader>
+              <CardTitle>Execution History</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <HistoryTable data={chartData || []} />
+            </CardContent>
+          </Card>
+        </>
       )}
     </div>
   );

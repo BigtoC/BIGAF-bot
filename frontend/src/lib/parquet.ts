@@ -6,6 +6,10 @@ export interface BotRecord {
   current_exchange_rate: number;
   gaf_amount: number;
   action_type: string;
+  transaction_hash?: string;
+  amount_diff?: string;
+  raw_current_exchange_rate: string;
+  raw_gaf_amount: string;
 }
 
 export async function fetchAndParseParquet(url: string): Promise<BotRecord[]> {
@@ -39,7 +43,11 @@ export async function fetchAndParseParquet(url: string): Promise<BotRecord[]> {
           current_exchange_rate: Number(row.current_exchange_rate ?? 0),
           gaf_amount: Number(row.gaf_amount ?? 0),
           action_type: String(row.action_type ?? ''),
-        } satisfies BotRecord;
+          transaction_hash: row.transaction_hash ? String(row.transaction_hash) : undefined,
+          amount_diff: row.amount_diff ? String(row.amount_diff) : undefined,
+          raw_current_exchange_rate: String(row.current_exchange_rate ?? ''),
+          raw_gaf_amount: String(row.gaf_amount ?? ''),
+        } as BotRecord;
       })
       .filter((record): record is BotRecord => record !== null);
   } catch (error) {
