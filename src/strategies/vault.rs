@@ -10,7 +10,7 @@ use crate::contracts::{
 use crate::record::{self, Record};
 use alloy::network::EthereumWallet;
 use alloy::primitives::{Address, U256};
-use alloy::providers::ProviderBuilder;
+use alloy::providers::{Provider, ProviderBuilder};
 use alloy::signers::local::PrivateKeySigner;
 use anyhow::{Result, anyhow};
 use chrono::Utc;
@@ -143,6 +143,215 @@ fn hold_record(current_rate: String) -> Record {
     }
 }
 
+async fn execute_withdraw<P>(
+    igaf: &ERC20::ERC20Instance<P>,
+    teller: &SimplifiedTeller::SimplifiedTellerInstance<P>,
+    gaf_address: Address,
+    teller_address: Address,
+    my_address: Address,
+    buffer: U256,
+    action_amount_control: f64,
+    current_rate: U256,
+    current_rate_decimal: &str,
+) -> Result<Record>
+where
+    P: Provider + Send + Sync + Clone + 'static,
+{
+    let igaf_balance = igaf.balanceOf(my_address).call().await?;
+    info!("iGAF Balance: {}", igaf_balance);
+
+    if let Some(available_balance) = available_after_buffer(igaf_balance, buffer) {
+        let amount_to_withdraw = calculate_action_amount(available_balance, action_amount_control);
+
+        if amount_to_withdraw > U256::ZERO {
+            info!(
+                "Withdrawing iGAF: {} (Balance: {} - Buffer: {})",
+                amount_to_withdraw, igaf_balance, buffer
+            );
+
+            let minimum_assets = calculate_minimum_assets(amount_to_withdraw, current_rate);
+            info!("minimum_assets: {minimum_assets}");
+
+            info!("Simulating iGAF approve transaction...");
+            match igaf
+                .approve(teller_address, amount_to_withdraw)
+                .call()
+                .await
+            {
+                Ok(_) => info!("Approve simulation succeeded"),
+                Err(e) => {
+                    info!("Approve simulation failed: {e}. Aborting withdrawal.");
+                    let summary = hold_record(current_rate_decimal.to_string());
+                    info!("Action result: {:?}", summary);
+                    return Ok(summary);
+                }
+            }
+
+            info!("Simulating withdraw transaction...");
+            match teller
+                .withdraw(gaf_address, amount_to_withdraw, minimum_assets)
+                .call()
+                .await
+            {
+                Ok(_) => info!("Withdraw simulation succeeded"),
+                Err(e) => {
+                    info!("Withdraw simulation failed: {e}. Aborting withdrawal.");
+                    let summary = hold_record(current_rate_decimal.to_string());
+                    info!("Action result: {:?}", summary);
+                    return Ok(summary);
+                }
+            }
+
+            igaf.approve(teller_address, amount_to_withdraw)
+                .send()
+                .await?
+                .watch()
+                .await?;
+            info!("Approved iGAF for teller");
+
+            let withdraw_tx_hash = teller
+                .withdraw(gaf_address, amount_to_withdraw, minimum_assets)
+                .send()
+                .await?
+                .watch()
+                .await?;
+            info!("Withdrawn iGAF: {withdraw_tx_hash:#x}");
+
+            let gaf_amount_u256 = calculate_minimum_assets(amount_to_withdraw, current_rate);
+            let gaf_amount = wei_to_decimal_string(gaf_amount_u256);
+            let last_withdraw = record::get_last_withdraw_amount()?;
+            let amount_diff = if let Some(last) = last_withdraw {
+                let last_wei = decimal_string_to_wei(&last)?;
+                Some(signed_decimal_difference(gaf_amount_u256, last_wei))
+            } else {
+                None
+            };
+
+            let summary = Record {
+                timestamp: Option::from(Utc::now().to_rfc3339()),
+                action_type: "withdraw".to_string(),
+                gaf_amount: Some(gaf_amount.clone()),
+                current_exchange_rate: current_rate_decimal.to_string(),
+                amount_diff,
+                transaction_hash: Some(format!("{withdraw_tx_hash:#x}")),
+            };
+            info!("Action result: {:?}", summary);
+            Ok(summary)
+        } else {
+            info!("Calculated withdraw amount is 0 or insufficient balance for fixed amount.");
+            let summary = hold_record(current_rate_decimal.to_string());
+            info!("Action result: {:?}", summary);
+            Ok(summary)
+        }
+    } else {
+        info!(
+            "Not enough iGAF to withdraw (balance {} <= buffer {}).",
+            igaf_balance, buffer
+        );
+        let summary = hold_record(current_rate_decimal.to_string());
+        info!("Action result: {:?}", summary);
+        Ok(summary)
+    }
+}
+
+async fn execute_deposit<P>(
+    gaf: &ERC20::ERC20Instance<P>,
+    teller: &SimplifiedTeller::SimplifiedTellerInstance<P>,
+    gaf_address: Address,
+    igaf_address: Address,
+    my_address: Address,
+    buffer: U256,
+    action_amount_control: f64,
+    current_rate: U256,
+    current_rate_decimal: &str,
+) -> Result<Record>
+where
+    P: Provider + Send + Sync + Clone + 'static,
+{
+    let gaf_balance = gaf.balanceOf(my_address).call().await?;
+    info!("GAF Balance: {}", gaf_balance);
+
+    if let Some(available_balance) = available_after_buffer(gaf_balance, buffer) {
+        let amount_to_deposit = calculate_action_amount(available_balance, action_amount_control);
+
+        if amount_to_deposit > U256::ZERO {
+            info!(
+                "Depositing GAF: {} (Balance: {} - Buffer: {})",
+                amount_to_deposit, gaf_balance, buffer
+            );
+
+            let minimum_mint = calculate_minimum_mint(amount_to_deposit, current_rate);
+            info!("minimum_mint: {minimum_mint}");
+
+            info!("Simulating GAF approve transaction...");
+            match gaf.approve(igaf_address, amount_to_deposit).call().await {
+                Ok(_) => info!("Approve simulation succeeded"),
+                Err(e) => {
+                    info!("Approve simulation failed: {e}. Aborting deposit.");
+                    let summary = hold_record(current_rate_decimal.to_string());
+                    info!("Action result: {:?}", summary);
+                    return Ok(summary);
+                }
+            }
+
+            info!("Simulating deposit transaction...");
+            match teller
+                .deposit(gaf_address, amount_to_deposit, minimum_mint)
+                .call()
+                .await
+            {
+                Ok(_) => info!("Deposit simulation succeeded"),
+                Err(e) => {
+                    info!("Deposit simulation failed: {e}. Aborting deposit.");
+                    let summary = hold_record(current_rate_decimal.to_string());
+                    info!("Action result: {:?}", summary);
+                    return Ok(summary);
+                }
+            }
+
+            gaf.approve(igaf_address, amount_to_deposit)
+                .send()
+                .await?
+                .watch()
+                .await?;
+            info!("Approved GAF for teller");
+
+            let deposit_tx_hash = teller
+                .deposit(gaf_address, amount_to_deposit, minimum_mint)
+                .send()
+                .await?
+                .watch()
+                .await?;
+            info!("Deposited GAF: {deposit_tx_hash:#x}");
+
+            let gaf_amount = wei_to_decimal_string(amount_to_deposit);
+            let summary = Record {
+                timestamp: Option::from(Utc::now().to_rfc3339()),
+                action_type: "deposit".to_string(),
+                gaf_amount: Some(gaf_amount.clone()),
+                current_exchange_rate: current_rate_decimal.to_string(),
+                amount_diff: None,
+                transaction_hash: Some(format!("{deposit_tx_hash:#x}")),
+            };
+            info!("Action result: {:?}", summary);
+            Ok(summary)
+        } else {
+            info!("Calculated deposit amount is 0 or insufficient balance for fixed amount.");
+            let summary = hold_record(current_rate_decimal.to_string());
+            info!("Action result: {:?}", summary);
+            Ok(summary)
+        }
+    } else {
+        info!(
+            "Not enough GAF to deposit (balance {} <= buffer {}).",
+            gaf_balance, buffer
+        );
+        let summary = hold_record(current_rate_decimal.to_string());
+        info!("Action result: {:?}", summary);
+        Ok(summary)
+    }
+}
+
 pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<Record> {
     // Setup provider
     let signer: PrivateKeySigner = private_key.parse()?;
@@ -229,196 +438,36 @@ pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<Record
         info!(
             "Current rate > Last action rate && current_rate > {min_withdraw_rate}. Start withdrawing..."
         );
-        let igaf_balance = igaf.balanceOf(my_address).call().await?;
-        info!("iGAF Balance: {}", igaf_balance);
-
-        if let Some(available_balance) = available_after_buffer(igaf_balance, buffer) {
-            let amount_to_withdraw =
-                calculate_action_amount(available_balance, action_amount_control);
-
-            if amount_to_withdraw > U256::ZERO {
-                info!(
-                    "Withdrawing iGAF: {} (Balance: {} - Buffer: {})",
-                    amount_to_withdraw, igaf_balance, buffer
-                );
-
-                let minimum_assets = calculate_minimum_assets(amount_to_withdraw, current_rate);
-                info!("minimum_assets: {minimum_assets}");
-
-                // Simulate the approval transaction
-                info!("Simulating iGAF approve transaction...");
-                match igaf.approve(teller_address, amount_to_withdraw).call().await {
-                    Ok(_) => info!("Approve simulation succeeded"),
-                    Err(e) => {
-                        info!("Approve simulation failed: {e}. Aborting withdrawal.");
-                        let summary = hold_record(current_rate_decimal.clone());
-                        info!("Action result: {:?}", summary);
-                        return Ok(summary);
-                    }
-                }
-
-                // Simulate the withdrawal transaction
-                info!("Simulating withdraw transaction...");
-                match teller
-                    .withdraw(gaf_address, amount_to_withdraw, minimum_assets)
-                    .call()
-                    .await
-                {
-                    Ok(_) => info!("Withdraw simulation succeeded"),
-                    Err(e) => {
-                        info!("Withdraw simulation failed: {e}. Aborting withdrawal.");
-                        let summary = hold_record(current_rate_decimal.clone());
-                        info!("Action result: {:?}", summary);
-                        return Ok(summary);
-                    }
-                }
-
-                // Execute the actual approve transaction
-                igaf.approve(teller_address, amount_to_withdraw)
-                    .send()
-                    .await?
-                    .watch()
-                    .await?;
-                info!("Approved iGAF for teller");
-
-                // Execute the actual withdraw transaction
-                let withdraw_tx_hash = teller
-                    .withdraw(gaf_address, amount_to_withdraw, minimum_assets)
-                    .send()
-                    .await?
-                    .watch()
-                    .await?;
-                info!("Withdrawn iGAF: {withdraw_tx_hash:#x}");
-
-                let gaf_amount_u256 = calculate_minimum_assets(amount_to_withdraw, current_rate);
-                let gaf_amount = wei_to_decimal_string(gaf_amount_u256);
-                let last_withdraw = record::get_last_withdraw_amount()?;
-                let amount_diff = if let Some(last) = last_withdraw {
-                    let last_wei = decimal_string_to_wei(&last)?;
-                    Some(signed_decimal_difference(gaf_amount_u256, last_wei))
-                } else {
-                    None
-                };
-
-                let summary = Record {
-                    timestamp: Option::from(Utc::now().to_rfc3339()),
-                    action_type: "withdraw".to_string(),
-                    gaf_amount: Some(gaf_amount.clone()),
-                    current_exchange_rate: current_rate_decimal.clone(),
-                    amount_diff,
-                    transaction_hash: Some(format!("{withdraw_tx_hash:#x}")),
-                };
-                info!("Action result: {:?}", summary);
-                Ok(summary)
-            } else {
-                info!("Calculated withdraw amount is 0 or insufficient balance for fixed amount.");
-                let summary = hold_record(current_rate_decimal.clone());
-                info!("Action result: {:?}", summary);
-                Ok(summary)
-            }
-        } else {
-            info!(
-                "Not enough iGAF to withdraw (balance {} <= buffer {}).",
-                igaf_balance, buffer
-            );
-            let summary = hold_record(current_rate_decimal.clone());
-            info!("Action result: {:?}", summary);
-            Ok(summary)
-        }
+        return execute_withdraw(
+            &igaf,
+            &teller,
+            gaf_address,
+            teller_address,
+            my_address,
+            buffer,
+            action_amount_control,
+            current_rate,
+            &current_rate_decimal,
+        )
+        .await;
     } else if current_rate < last_action_rate
         && current_rate < U256::from(max_deposit_rate * WEI_SCALE_F64)
     {
         info!(
             "Current rate < Last action rate && current_rate < {max_deposit_rate}. Start depositing..."
         );
-        let gaf_balance = gaf.balanceOf(my_address).call().await?;
-        info!("GAF Balance: {}", gaf_balance);
-
-        return if let Some(available_balance) = available_after_buffer(gaf_balance, buffer) {
-            let amount_to_deposit =
-                calculate_action_amount(available_balance, action_amount_control);
-
-            if amount_to_deposit > U256::ZERO {
-                info!(
-                    "Depositing GAF: {} (Balance: {} - Buffer: {})",
-                    amount_to_deposit, gaf_balance, buffer
-                );
-
-                let minimum_mint = calculate_minimum_mint(amount_to_deposit, current_rate);
-                info!("minimum_mint: {minimum_mint}");
-
-                // Simulate the approval transaction
-                info!("Simulating GAF approve transaction...");
-                match gaf.approve(igaf_address, amount_to_deposit).call().await {
-                    Ok(_) => info!("Approve simulation succeeded"),
-                    Err(e) => {
-                        info!("Approve simulation failed: {e}. Aborting deposit.");
-                        let summary = hold_record(current_rate_decimal.clone());
-                        info!("Action result: {:?}", summary);
-                        return Ok(summary);
-                    }
-                }
-
-                // Simulate the deposit transaction
-                info!("Simulating deposit transaction...");
-                match teller
-                    .deposit(gaf_address, amount_to_deposit, minimum_mint)
-                    .call()
-                    .await
-                {
-                    Ok(_) => info!("Deposit simulation succeeded"),
-                    Err(e) => {
-                        info!("Deposit simulation failed: {e}. Aborting deposit.");
-                        let summary = hold_record(current_rate_decimal.clone());
-                        info!("Action result: {:?}", summary);
-                        return Ok(summary);
-                    }
-                }
-
-                // Execute the actual approve transaction
-                gaf.approve(igaf_address, amount_to_deposit)
-                    .send()
-                    .await?
-                    .watch()
-                    .await?;
-                info!("Approved GAF for teller");
-
-                // Execute the actual deposit transaction
-                let deposit_tx_hash = teller
-                    .deposit(gaf_address, amount_to_deposit, minimum_mint)
-                    .send()
-                    .await?
-                    .watch()
-                    .await?;
-                info!("Deposited GAF: {deposit_tx_hash:#x}");
-
-                let gaf_amount = wei_to_decimal_string(amount_to_deposit);
-
-                let summary = Record {
-                    timestamp: Option::from(Utc::now().to_rfc3339()),
-                    action_type: "deposit".to_string(),
-                    gaf_amount: Some(gaf_amount.clone()),
-                    current_exchange_rate: current_rate_decimal.clone(),
-                    amount_diff: None,
-                    transaction_hash: Some(format!("{deposit_tx_hash:#x}")),
-                };
-                info!("Action result: {:?}", summary);
-                Ok(summary)
-            } else {
-                info!("Calculated deposit amount is 0 or insufficient balance for fixed amount.");
-                let summary = hold_record(current_rate_decimal.clone());
-                info!("Action result: {:?}", summary);
-                Ok(summary)
-            }
-        } else {
-            info!(
-                "Not enough GAF to deposit (balance {} <= buffer {}).",
-                gaf_balance, buffer
-            );
-            let summary = hold_record(current_rate_decimal.clone());
-            info!("Action result: {:?}", summary);
-            Ok(summary)
-        };
+        return execute_deposit(
+            &gaf,
+            &teller,
+            gaf_address,
+            igaf_address,
+            my_address,
+            buffer,
+            action_amount_control,
+            current_rate,
+            &current_rate_decimal,
+        )
+        .await;
     } else {
         info!("Rates are equal or no action condition met.");
         let summary = hold_record(current_rate_decimal);
