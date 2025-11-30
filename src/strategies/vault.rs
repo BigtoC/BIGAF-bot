@@ -132,14 +132,14 @@ fn signed_decimal_difference(current: U256, previous: U256) -> String {
     }
 }
 
-fn hold_record(current_rate: String) -> Record {
+fn hold_record(current_rate: String, reason: &str) -> Record {
     Record {
         timestamp: Option::from(Utc::now().to_rfc3339()),
         action_type: "hold".to_string(),
         gaf_amount: None,
         current_exchange_rate: current_rate,
         amount_diff: None,
-        transaction_hash: None,
+        transaction_hash: Some(reason.to_string()),
     }
 }
 
@@ -183,7 +183,7 @@ where
                     "Insufficient GAF liquidity in iGAF contract. Required: {}, Available: {}",
                     minimum_assets, igaf_contract_gaf_balance
                 );
-                let summary = hold_record(current_rate_decimal.to_string());
+                let summary = hold_record(current_rate_decimal.to_string(), "insufficient_liquidity");
                 info!("Action result: {:?}", summary);
                 return Ok(summary);
             }
@@ -197,7 +197,7 @@ where
                 Ok(_) => info!("Approve simulation succeeded"),
                 Err(e) => {
                     info!("Approve simulation failed: {e}. Aborting withdrawal.");
-                    let summary = hold_record(current_rate_decimal.to_string());
+                    let summary = hold_record(current_rate_decimal.to_string(), "igaf_approve_sim_failed");
                     info!("Action result: {:?}", summary);
                     return Ok(summary);
                 }
@@ -212,7 +212,7 @@ where
                 Ok(_) => info!("Withdraw simulation succeeded"),
                 Err(e) => {
                     info!("Withdraw simulation failed: {e}. Aborting withdrawal.");
-                    let summary = hold_record(current_rate_decimal.to_string());
+                    let summary = hold_record(current_rate_decimal.to_string(), "withdraw_sim_failed");
                     info!("Action result: {:?}", summary);
                     return Ok(summary);
                 }
@@ -255,7 +255,7 @@ where
             Ok(summary)
         } else {
             info!("Calculated withdraw amount is 0 or insufficient balance for fixed amount.");
-            let summary = hold_record(current_rate_decimal.to_string());
+            let summary = hold_record(current_rate_decimal.to_string(), "withdraw_amount_zero_or_insufficient");
             info!("Action result: {:?}", summary);
             Ok(summary)
         }
@@ -264,7 +264,7 @@ where
             "Not enough iGAF to withdraw (balance {} <= buffer {}).",
             igaf_balance, buffer
         );
-        let summary = hold_record(current_rate_decimal.to_string());
+        let summary = hold_record(current_rate_decimal.to_string(), "insufficient_igaf_balance");
         info!("Action result: {:?}", summary);
         Ok(summary)
     }
@@ -304,7 +304,7 @@ where
                 Ok(_) => info!("Approve simulation succeeded"),
                 Err(e) => {
                     info!("Approve simulation failed: {e}. Aborting deposit.");
-                    let summary = hold_record(current_rate_decimal.to_string());
+                    let summary = hold_record(current_rate_decimal.to_string(), "gaf_approve_sim_failed");
                     info!("Action result: {:?}", summary);
                     return Ok(summary);
                 }
@@ -319,7 +319,7 @@ where
                 Ok(_) => info!("Deposit simulation succeeded"),
                 Err(e) => {
                     info!("Deposit simulation failed: {e}. Aborting deposit.");
-                    let summary = hold_record(current_rate_decimal.to_string());
+                    let summary = hold_record(current_rate_decimal.to_string(), "deposit_sim_failed");
                     info!("Action result: {:?}", summary);
                     return Ok(summary);
                 }
@@ -353,7 +353,7 @@ where
             Ok(summary)
         } else {
             info!("Calculated deposit amount is 0 or insufficient balance for fixed amount.");
-            let summary = hold_record(current_rate_decimal.to_string());
+            let summary = hold_record(current_rate_decimal.to_string(), "deposit_amount_zero_or_insufficient");
             info!("Action result: {:?}", summary);
             Ok(summary)
         }
@@ -362,7 +362,7 @@ where
             "Not enough GAF to deposit (balance {} <= buffer {}).",
             gaf_balance, buffer
         );
-        let summary = hold_record(current_rate_decimal.to_string());
+        let summary = hold_record(current_rate_decimal.to_string(), "insufficient_gaf_balance");
         info!("Action result: {:?}", summary);
         Ok(summary)
     }
@@ -488,7 +488,7 @@ pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<Record
         .await;
     } else {
         info!("Rates are equal or no action condition met.");
-        let summary = hold_record(current_rate_decimal);
+        let summary = hold_record(current_rate_decimal, "rate_condition_not_match");
         info!("Action result: {:?}", summary);
         Ok(summary)
     }
