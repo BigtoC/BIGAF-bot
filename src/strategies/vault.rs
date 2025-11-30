@@ -145,8 +145,10 @@ fn hold_record(current_rate: String) -> Record {
 
 async fn execute_withdraw<P>(
     igaf: &ERC20::ERC20Instance<P>,
+    gaf: &ERC20::ERC20Instance<P>,
     teller: &SimplifiedTeller::SimplifiedTellerInstance<P>,
     gaf_address: Address,
+    igaf_address: Address,
     teller_address: Address,
     my_address: Address,
     buffer: U256,
@@ -171,6 +173,20 @@ where
 
             let minimum_assets = calculate_minimum_assets(amount_to_withdraw, current_rate);
             info!("minimum_assets: {minimum_assets}");
+
+            // Check if iGAF contract has enough GAF balance
+            let igaf_contract_gaf_balance = gaf.balanceOf(igaf_address).call().await?;
+            info!("iGAF contract GAF balance: {}", igaf_contract_gaf_balance);
+
+            if igaf_contract_gaf_balance < minimum_assets {
+                info!(
+                    "Insufficient GAF liquidity in iGAF contract. Required: {}, Available: {}",
+                    minimum_assets, igaf_contract_gaf_balance
+                );
+                let summary = hold_record(current_rate_decimal.to_string());
+                info!("Action result: {:?}", summary);
+                return Ok(summary);
+            }
 
             info!("Simulating iGAF approve transaction...");
             match igaf
@@ -438,10 +454,12 @@ pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<Record
         info!(
             "Current rate > Last action rate && current_rate > {min_withdraw_rate}. Start withdrawing..."
         );
-        return execute_withdraw(
+        execute_withdraw(
             &igaf,
+            &gaf,
             &teller,
             gaf_address,
+            igaf_address,
             teller_address,
             my_address,
             buffer,
@@ -449,7 +467,7 @@ pub async fn execute_strategy(rpc_url: &str, private_key: &str) -> Result<Record
             current_rate,
             &current_rate_decimal,
         )
-        .await;
+        .await
     } else if current_rate < last_action_rate
         && current_rate < U256::from(max_deposit_rate * WEI_SCALE_F64)
     {
