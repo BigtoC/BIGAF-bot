@@ -3,10 +3,11 @@ Have fun!
 
 [![Release](https://github.com/BigtoC/BIGAF-bot/actions/workflows/release.yaml/badge.svg)](https://github.com/BigtoC/BIGAF-bot/actions/workflows/release.yaml)
 [![GAF Vault Bot](https://github.com/BigtoC/BIGAF-bot/actions/workflows/bot.yaml/badge.svg)](https://github.com/BigtoC/BIGAF-bot/actions/workflows/bot.yaml)
+[![Deploy Frontend to GitHub Pages](https://github.com/BigtoC/BIGAF-bot/actions/workflows/deploy-frontend.yml/badge.svg)](https://github.com/BigtoC/BIGAF-bot/actions/workflows/deploy-frontend.yml)
 
 ## Contribution
 ### Branch Naming
-Since this is a multi-apps monorepo, to ensure clarity and organization across the repository, I suggest when creating a new branch for a service, follow this naming convention:
+Since this is a multi-app monorepo, to ensure clarity and organization across the repository, I suggest that when creating a new branch for a service, follow this naming convention:
 `app-name/type/following-names`
 
 For example:
